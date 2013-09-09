@@ -97,6 +97,14 @@ public class ThriftUtils {
                 .toString();
     }
 
+    public static String generateGetBooleanMethodName( String fieldName ) {
+        return new StringBuffer( 16 )
+                .append( "is" )
+                .append( Character.toUpperCase( fieldName.charAt( 0 ) ) )
+                .append( fieldName.substring( 1 ) )
+                .toString();
+    }
+
     public static String generateMethodArgsClassNameThrift( String serviceName, String methodName ) {
 
         int index = serviceName.indexOf( "$" );

@@ -38,6 +38,7 @@ import org.apache.thrift.transport.TIOStreamTransport;
 
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.extension.ExtensionLoader;
+import com.alibaba.dubbo.common.utils.AtomicPositiveInteger;
 import com.alibaba.dubbo.common.utils.ClassHelper;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.Codec2;
@@ -75,9 +76,14 @@ public class ThriftCodec implements Codec2 {
 
     private static final AtomicInteger THRIFT_SEQ_ID = new AtomicInteger( 0 );
 
+    private static final AtomicPositiveInteger cachedId = new AtomicPositiveInteger(0);
+
+    // XXX 这个缓存的Map没有过期策略
     private static final ConcurrentMap<String, Class<?>> cachedClass =
             new ConcurrentHashMap<String, Class<?>>();
 
+    // XXX 这个缓存的Map没有过期策略,请求越来越多，这个Map越长越大
+    // XXX 当多个client 使用相同的request_id时，从这个Map获取数据时，有可能发生获取了错误的数据
     static final ConcurrentMap<Long, RequestData> cachedRequest =
             new ConcurrentHashMap<Long, RequestData>();
 
@@ -242,8 +248,13 @@ public class ThriftCodec implements Codec2 {
                 try {
                     getMethod = clazz.getMethod( getMethodName );
                 } catch ( NoSuchMethodException e ) {
-                    throw new RpcException(
-                            RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
+                	// try as a boolean type field
+                	String boolGetMethodName = ThriftUtils.generateGetBooleanMethodName(fieldName);
+                	try{
+                		getMethod = clazz.getMethod(boolGetMethodName);
+                	}catch (NoSuchMethodException e2) {
+                		 throw new RpcException(RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
+					}
                 }
 
                 parameterTypes.add( getMethod.getReturnType() );
@@ -262,11 +273,12 @@ public class ThriftCodec implements Codec2 {
             result.setArguments( parameters.toArray() );
             result.setParameterTypes(parameterTypes.toArray(new Class[parameterTypes.size()]));
 
-            Request request = new Request( id );
+            // 每次生成一个id 放入缓存中
+            int cacheReqId = cachedId.getAndIncrement();
+            Request request = new Request( cacheReqId );
             request.setData( result );
 
-            cachedRequest.putIfAbsent( id,
-                                       RequestData.create( message.seqid, serviceName, message.name ) );
+            cachedRequest.putIfAbsent( new Long(cacheReqId), RequestData.create(id, message.seqid, serviceName, message.name ) );
 
             return request;
 
@@ -530,12 +542,16 @@ public class ThriftCodec implements Codec2 {
 
     }
 
-    private void encodeResponse( Channel channel, ChannelBuffer buffer, Response response )
+    @SuppressWarnings("unchecked")
+	private void encodeResponse( Channel channel, ChannelBuffer buffer, Response response )
             throws IOException {
 
         RpcResult result = ( RpcResult ) response.getResult();
 
         RequestData rd = cachedRequest.get( response.getId() );
+        // 把原来的reqId 恢复回来
+        response.setId(rd.reqId);
+
 
         String resultClassName = ExtensionLoader.getExtensionLoader( ClassNameGenerator.class ).getExtension(
                     channel.getUrl().getParameter(ThriftConstants.CLASS_NAME_GENERATOR_KEY, ThriftClassNameGenerator.NAME))
@@ -586,7 +602,14 @@ public class ThriftCodec implements Codec2 {
                 Method getMethod;
                 Method setMethod;
                 try {
-                    getMethod = clazz.getMethod( getMethodName );
+                	try{
+                		getMethod = clazz.getMethod( getMethodName );
+                	}catch (NoSuchMethodException e) {
+                    	// try as a boolean type field
+                    	String boolGetMethodName = ThriftUtils.generateGetBooleanMethodName(fieldName);
+                    	getMethod = clazz.getMethod(boolGetMethodName);
+					}
+
                     if ( getMethod.getReturnType().equals( throwable.getClass() ) ) {
                         found = true;
                         setMethod = clazz.getMethod( setMethodName, throwable.getClass() );
@@ -614,7 +637,12 @@ public class ThriftCodec implements Codec2 {
             Method getMethod;
             Method setMethod;
             try {
-                getMethod = clazz.getMethod( getMethodName );
+            	try{
+            		getMethod = clazz.getMethod( getMethodName );
+            	}catch (NoSuchMethodException e) {
+                	String boolGetMethodName = ThriftUtils.generateGetBooleanMethodName(fieldName);
+                	getMethod = clazz.getMethod(boolGetMethodName);
+				}
                 setMethod = clazz.getMethod( setMethodName, getMethod.getReturnType() );
                 setMethod.invoke( resultObj, realResult );
             } catch ( NoSuchMethodException e ) {
@@ -702,12 +730,14 @@ public class ThriftCodec implements Codec2 {
     }
 
     static class RequestData {
+    	long reqId;
         int id;
         String serviceName;
         String methodName;
 
-        static RequestData create( int id, String sn, String mn ) {
+        static RequestData create( long reqId, int id, String sn, String mn ) {
             RequestData result = new RequestData();
+            result.reqId = reqId;
             result.id = id;
             result.serviceName = sn;
             result.methodName = mn;
