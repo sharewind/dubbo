@@ -542,15 +542,16 @@ public class ThriftCodec implements Codec2 {
 
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "deprecation" })
 	private void encodeResponse( Channel channel, ChannelBuffer buffer, Response response )
             throws IOException {
 
         RpcResult result = ( RpcResult ) response.getResult();
 
-        RequestData rd = cachedRequest.get( response.getId() );
+        RequestData rd = cachedRequest.get( response.getId() );//        cachedRequest.remove(response.getId());// XXX 移除缓存的东东，防止 OOM
         // 把原来的reqId 恢复回来
         response.setId(rd.reqId);
+
 
 
         String resultClassName = ExtensionLoader.getExtensionLoader( ClassNameGenerator.class ).getExtension(
@@ -631,28 +632,30 @@ public class ThriftCodec implements Codec2 {
         } else {
             Object realResult = result.getResult();
             // result field id is 0
-            String fieldName = resultObj.fieldForId( 0 ).getFieldName();
-            String setMethodName = ThriftUtils.generateSetMethodName( fieldName );
-            String getMethodName = ThriftUtils.generateGetMethodName( fieldName );
-            Method getMethod;
-            Method setMethod;
-            try {
-            	try{
-            		getMethod = clazz.getMethod( getMethodName );
-            	}catch (NoSuchMethodException e) {
-                	String boolGetMethodName = ThriftUtils.generateGetBooleanMethodName(fieldName);
-                	getMethod = clazz.getMethod(boolGetMethodName);
-				}
-                setMethod = clazz.getMethod( setMethodName, getMethod.getReturnType() );
-                setMethod.invoke( resultObj, realResult );
-            } catch ( NoSuchMethodException e ) {
-                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
-            } catch ( InvocationTargetException e ) {
-                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
-            } catch ( IllegalAccessException e ) {
-                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
-            }
-
+            TFieldIdEnum field = resultObj.fieldForId( 0 );
+            if(field != null){ // 返回值不为void
+	            String fieldName  = field.getFieldName();
+	            String setMethodName = ThriftUtils.generateSetMethodName( fieldName );
+	            String getMethodName = ThriftUtils.generateGetMethodName( fieldName );
+	            Method getMethod;
+	            Method setMethod;
+	            try {
+	            	try{
+	            		getMethod = clazz.getMethod( getMethodName );
+	            	}catch (NoSuchMethodException e) {
+	                	String boolGetMethodName = ThriftUtils.generateGetBooleanMethodName(fieldName);
+	                	getMethod = clazz.getMethod(boolGetMethodName);
+					}
+	                setMethod = clazz.getMethod( setMethodName, getMethod.getReturnType() );
+	                setMethod.invoke( resultObj, realResult );
+	            } catch ( NoSuchMethodException e ) {
+	                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
+	            } catch ( InvocationTargetException e ) {
+	                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
+	            } catch ( IllegalAccessException e ) {
+	                throw new RpcException( RpcException.SERIALIZATION_EXCEPTION, e.getMessage(), e );
+	            }
+	        }//end if
         }
 
         if ( applicationException != null ) {
