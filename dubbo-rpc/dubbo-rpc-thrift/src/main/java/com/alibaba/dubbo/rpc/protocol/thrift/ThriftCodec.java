@@ -157,7 +157,8 @@ public class ThriftCodec implements Codec2 {
                                 .toString() );
             }
 
-            if ( available < messageLength ) { return  DecodeResult.NEED_MORE_INPUT; }
+            // XXX 此处加上4为 读取时还有另外的frameSize4个字节
+            if ( available < (messageLength + 4) ) { return  DecodeResult.NEED_MORE_INPUT; }
 
             return decode( protocol );
 
