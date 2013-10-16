@@ -79,13 +79,11 @@ public class ThriftCodec implements Codec2 {
     private static final AtomicPositiveInteger cachedId = new AtomicPositiveInteger(0);
 
     // XXX 这个缓存的Map没有过期策略
-    private static final ConcurrentMap<String, Class<?>> cachedClass =
-            new ConcurrentHashMap<String, Class<?>>();
+    private static final ConcurrentMap<String, Class<?>> cachedClass = new ConcurrentHashMap<String, Class<?>>();
 
     // XXX 这个缓存的Map没有过期策略,请求越来越多，这个Map越长越大
     // XXX 当多个client 使用相同的request_id时，从这个Map获取数据时，有可能发生获取了错误的数据
-    static final ConcurrentMap<Long, RequestData> cachedRequest =
-            new ConcurrentHashMap<Long, RequestData>();
+    static final ConcurrentMap<Long, RequestData> cachedRequest = new ConcurrentHashMap<Long, RequestData>();
 
     public static final int MESSAGE_LENGTH_INDEX = 2;
 
@@ -549,7 +547,8 @@ public class ThriftCodec implements Codec2 {
 
         RpcResult result = ( RpcResult ) response.getResult();
 
-        RequestData rd = cachedRequest.get( response.getId() );//        cachedRequest.remove(response.getId());// XXX 移除缓存的东东，防止 OOM
+        RequestData rd = cachedRequest.get( response.getId() );
+        cachedRequest.remove(response.getId());// 移除缓存的东东，防止 OOM
         // 把原来的reqId 恢复回来
         response.setId(rd.reqId);
 

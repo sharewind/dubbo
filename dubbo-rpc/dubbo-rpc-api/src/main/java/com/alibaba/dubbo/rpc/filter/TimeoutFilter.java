@@ -1,12 +1,12 @@
 /*
  * Copyright 1999-2011 Alibaba Group.
- *  
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *  
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- *  
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,7 +29,7 @@ import com.alibaba.dubbo.rpc.RpcException;
 
 /**
  * 如果执行timeout，则log记录下，不干涉服务的运行
- * 
+ *
  * @author chao.liuc
  */
 @Activate(group = Constants.PROVIDER)
@@ -46,11 +46,11 @@ public class TimeoutFilter implements Filter {
                         "timeout", Integer.MAX_VALUE)) {
             if (logger.isWarnEnabled()) {
                 logger.warn("invoke time out. method: " + invocation.getMethodName()
-                        + "arguments: " + Arrays.toString(invocation.getArguments()) + " , url is "
+                        + ", arguments: " + Arrays.toString(invocation.getArguments()) + " , url is "
                         + invoker.getUrl() + ", invoke elapsed " + elapsed + " ms.");
             }
         }
         return result;
     }
-    
+
 }
